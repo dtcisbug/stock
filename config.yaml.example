@@ -1,0 +1,53 @@
+# 股票行情服务配置文件
+# 使用说明: 复制此文件为 config.yaml 并填入实际配置值
+
+# API 配置
+api:
+  # Anthropic API Token (必填)
+  # 获取地址: https://console.anthropic.com/settings/keys
+  token: ""
+
+  # API 基础地址 (可选)
+  # 默认: https://api.anthropic.com
+  # 如使用代理或中转服务,可修改此地址
+  base_url: "https://api.anthropic.com"
+
+  # Claude 模型名称 (可选)
+  # 推荐: claude-sonnet-4-5-20250929
+  # 其他可选: claude-3-5-sonnet-20241022, claude-opus-4-5-20251101
+  model: "claude-sonnet-4-5-20250929"
+
+# 监控配置
+monitor:
+  # 监控的股票列表
+  # 格式: sh开头为上海股票, sz开头为深圳股票
+  # 示例: sh600000 (浦发银行), sz000001 (平安银行)
+  stocks:
+    - sz002415   # 海康威视
+    - sh513130   # 恒生科技ETF
+    - sh600362   # 江坡龙
+
+  # 监控的期货列表
+  # 格式: nf_ + 品种代码 + 0 (主连)
+  # 示例: nf_AU0 (黄金主连), nf_CU0 (铜主连)
+  futures:
+    - nf_I0      # 铁矿石主连
+    - nf_B0      # 豆二主连
+    - nf_MA0     # 甲醇主连
+    - nf_UR0     # 尿素主连
+    - nf_EB0     # 苯乙烯主连
+    - pp2605     # PP2605（支持简写，会自动转成 nf_PP2605）
+
+# 服务配置
+server:
+  # HTTP 服务监听端口
+  # 默认: 19527
+  port: 19527
+
+  # 是否启用 AI 分析功能
+  # 需要配置有效的 API token
+  enable_ai: true
+
+  # 数据同步间隔(秒)
+  # 建议: 3-10 秒之间
+  sync_interval: 5
