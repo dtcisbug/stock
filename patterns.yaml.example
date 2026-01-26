@@ -1,0 +1,44 @@
+# Backtest config (daily bars, close-confirm -> next open execution)
+backtest:
+  days: 5000
+  start: "2018-01-01"
+  end: "2025-12-31"
+  initial_cash: 1000000
+  position_pct: 1.0
+  slippage_bps: 5
+  commission_bps: 1
+  stock_lot_size: 100
+  futures_multiplier: 1
+  futures_margin_rate: 1
+  instruments:
+    stocks:
+      - sh600000
+    futures:
+      - nf_I0
+
+strategy:
+  # patterns: M头/W底/头肩顶/头肩底/三角形/波段等幅（基于枢轴点的简化实现）
+  type: patterns
+  params:
+    lookback: 220
+    pivot_n: 3
+    equal_tol_pct: 0.02
+    break_pct: 0.005
+    stop_buffer_pct: 0.005
+    target_multiple: 1.0
+
+    enable_m_top: true
+    enable_w_bottom: true
+    enable_hs_top: true
+    enable_hs_bottom: true
+    enable_triangle_breakout: true
+    enable_triangle_breakdown: true
+    enable_wave_up: true
+    enable_wave_down: true
+
+    # Triangle timing window (图示常见 2/3~3/4 处突破才算有效)
+    triangle_lookback: 160
+    triangle_min_pivots: 3
+    triangle_min_break_frac: 0.66
+    triangle_max_break_frac: 0.75
+

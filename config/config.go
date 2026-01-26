@@ -89,6 +89,11 @@ var DefaultConfig = Config{
 
 var futuresShortCodeRe = regexp.MustCompile(`^([A-Za-z]+)([0-9]+)$`)
 
+// NormalizeFuturesCode 统一期货代码格式，兼容简写（如 pp2605 / AU0）。
+func NormalizeFuturesCode(code string) string {
+	return normalizeFuturesCode(code)
+}
+
 func normalizeFuturesCode(code string) string {
 	c := strings.TrimSpace(code)
 	if c == "" {

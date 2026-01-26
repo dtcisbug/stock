@@ -1,0 +1,72 @@
+# Backtest config (daily bars, close-confirm -> next open execution)
+backtest:
+  # pull last N bars, then filter by start/end if provided
+  days: 5000
+  start: "2015-01-01"
+  end: "2025-12-31"
+
+  # simple cash-based simulator
+  initial_cash: 1000000
+  position_pct: 1.0
+  slippage_bps: 5
+  commission_bps: 1
+
+  # A-share sizing
+  stock_lot_size: 100
+
+  # Futures sizing (PnL multiplier, default 1)
+  futures_multiplier: 1
+  # Futures margin rate used for position sizing / equity (1 = fully-funded, 0.12 = 12% margin)
+  futures_margin_rate: 1
+
+  instruments:
+    stocks:
+      - sh600000
+    futures:
+      - nf_I0
+      - pp2605   # will be normalized to nf_PP2605
+
+strategy:
+  type: tsai_sen
+  params:
+    # level_mode:
+    # - pivots: use pivot-touch clustering to estimate support/resistance (closer to Tsai Sen style)
+    # - extremes: support=min(low), resistance=max(high) in lookback window
+    level_mode: pivots
+
+    # box_lookback: window for level detection (daily bars)
+    box_lookback: 60
+    # pivot_n: pivot window size (n-left & n-right)
+    pivot_n: 3
+    # touch_tol_pct: cluster tolerance for "touching" the same level (e.g. 0.003 = 0.3%)
+    touch_tol_pct: 0.003
+    # min_touches: minimum pivot touches needed for both support/resistance
+    min_touches: 3
+    # min_range_pct: minimum box height (resistance-support)/support
+    min_range_pct: 0.03
+
+    # breakout/breakdown threshold (relative)
+    break_pct: 0.005
+    reclaim_pct: 0.0
+
+    # must reclaim within N bars after breakdown
+    flip_max_bars: 20
+
+    # reclaim_support = buy when close back above support
+    # stabilize_support = buy after reclaim + N consecutive closes above support (止稳)
+    # break_resistance = buy when close breaks above resistance after reclaim
+    entry_mode: reclaim_support
+    stabilize_bars: 2
+
+    # suggested stop/target (scan output)
+    stop_buffer_pct: 0.005
+    target_multiple: 1.0
+    stabilize_bars: 2
+
+    # optional volume filter: volume / MA(volume, N) >= ratio
+    vol_ma_n: 20
+    vol_ratio_min: 0
+
+    # fake breakout logic (range breakout then close back below resistance)
+    enable_fake_breakout: true
+    fake_max_bars: 10

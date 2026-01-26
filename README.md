@@ -187,6 +187,133 @@ stock/
 - 历史K线：东方财富（股票）、新浪财经（期货）
 - AI分析：Anthropic Claude API
 
+## 日线回测（实验）
+
+项目内置一个“收盘确认 -> 次日开盘成交”的日线回测入口，用于验证基于蔡森“破底翻 / 假突破”逻辑的量价结构策略（参数化实现，便于后续接入本地大模型自动生成配置）。
+
+**1. 准备回测配置**
+
+```bash
+cp backtest.yaml.example backtest.yaml
+```
+
+**2. 运行回测**
+
+```bash
+./stock -backtest -bt-config backtest.yaml
+```
+
+也可以使用形态策略示例（M头/W底/头肩顶/头肩底/三角形/波段等幅）：
+
+```bash
+cp patterns.yaml.example patterns.yaml
+./stock -backtest -bt-config patterns.yaml -bt-out report.json
+```
+
+**3. 输出到文件**
+
+```bash
+./stock -backtest -bt-config backtest.yaml -bt-out report.json
+```
+
+## 最新信号扫描（实验）
+
+扫描“最新一根日K收盘是否产生信号”（信号在收盘确认，**下一交易日开盘执行**），同时输出当前持仓状态：
+
+```bash
+./stock -scan -bt-config backtest.yaml
+```
+
+最近一年（自动覆盖日期窗口）：
+
+```bash
+./stock -scan -bt-config backtest.yaml -scan-days 365
+```
+
+说明：`-scan-days 365` 按“自然日窗口”计算（含周末/节假日），内部会拉取足够多的日K后再按 `start/end` 过滤，所以实际有效K线条数通常会少于 365。
+
+默认会把 `backtest.yaml` 的标的列表与当前目录的 `config.yaml`（监控 stocks/futures）合并后一起扫描；如需指定配置文件路径，可加 `-config path/to/config.yaml`。
+
+仅输出有信号的标的：
+
+```bash
+./stock -scan -bt-config backtest.yaml -scan-only-signal
+```
+
+输出趋势上下文图（SVG，包含K线 + 关键画线，如支撑/压力、止损/目标等）：
+
+```bash
+./stock -scan -bt-config backtest.yaml -scan-days 365 -scan-chart -scan-chart-bars 220
+```
+
+图默认输出到 `scan_charts/`，每个标的一个 `SYMBOL.svg`（可用浏览器直接打开）。
+
+JSON 输出：
+
+```bash
+./stock -scan -bt-config backtest.yaml -scan-json
+```
+
+## 扫描建议（Ollama）
+
+用本地 Ollama 把扫描结果变成可读的执行清单（Markdown）：
+
+```bash
+./stock -llm-scan -bt-config backtest.yaml -llm-url http://localhost:11434 -llm-model qwen2.5-coder:14b > advice.md
+```
+
+如果首次加载模型较慢导致超时，可调大超时时间：
+
+```bash
+./stock -llm-scan -bt-config backtest.yaml -scan-days 365 -llm-timeout 10m > advice.md
+```
+
+建议配合输出 SVG 图（LLM 会在建议里引用 `chart_path`，方便你打开看趋势结构）：
+
+```bash
+./stock -llm-scan -bt-config backtest.yaml -scan-days 365 -scan-chart -llm-timeout 10m -llm-out advice.md
+```
+
+最近一年（自动覆盖日期窗口）：
+
+```bash
+./stock -llm-scan -bt-config backtest.yaml -scan-days 365 > advice.md
+```
+
+仅输出有信号的标的：
+
+```bash
+./stock -llm-scan -bt-config backtest.yaml -llm-scan-only-signal > advice.md
+```
+
+## 本地大模型（Ollama）辅助
+
+项目支持用本地 Ollama + `qwen2.5-coder:14b` 做两件事：
+
+1) 自然语言策略 → 生成并校验 `backtest.yaml`（严格 JSON Schema，避免乱填字段）  
+2) `report.json` → 复盘总结（Markdown）
+
+### 1. 自然语言生成 backtest.yaml
+
+```bash
+echo "用日线做蔡森破底翻+假突破，回测 nf_I0 和 sh600000，2018-01-01 到 2025-12-31" | \
+  ./stock -llm-gen-bt -llm-url http://localhost:11434 -llm-model qwen2.5-coder:14b -llm-out backtest.yaml
+```
+
+### 2. 回测报告复盘
+
+先运行回测输出 `report.json`：
+
+```bash
+./stock -backtest -bt-config backtest.yaml -bt-out report.json
+```
+
+再让 LLM 生成复盘：
+
+```bash
+./stock -llm-analyze report.json -llm-bt-config backtest.yaml > review.md
+```
+
 ## 配置文件说明
 
 配置文件 `config.yaml` 支持以下配置项:

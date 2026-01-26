@@ -25,6 +25,28 @@ var (
 	cliMode        bool
 	enableAI       bool
 	configPath     string
+	backtestMode   bool
+	backtestConfig string
+	backtestOut    string
+	llmGenBT       bool
+	llmAnalyzePath string
+	llmPrompt      string
+	llmPromptFile  string
+	llmURL         string
+	llmModel       string
+	llmOut         string
+	llmBTConfig    string
+	llmTimeout     time.Duration
+	llmScan        bool
+	llmScanOnly    bool
+	scanMode       bool
+	scanOut        string
+	scanJSON       bool
+	scanOnlySignal bool
+	scanDays       int
+	scanChart      bool
+	scanChartDir   string
+	scanChartBars  int
 	globalAnalyzer *analyzer.ClaudeAnalyzer
 )
 
@@ -32,9 +54,87 @@ func main() {
 	flag.BoolVar(&cliMode, "cli", false, "终端实时行情模式")
 	flag.BoolVar(&enableAI, "ai", false, "启用AI分析功能")
 	flag.StringVar(&configPath, "config", "", "配置文件路径(YAML格式)")
+	flag.BoolVar(&backtestMode, "backtest", false, "运行日线回测并退出")
+	flag.StringVar(&backtestConfig, "bt-config", "backtest.yaml", "回测配置文件路径(YAML格式)")
+	flag.StringVar(&backtestOut, "bt-out", "", "回测输出JSON文件路径(默认stdout)")
+	flag.BoolVar(&llmGenBT, "llm-gen-bt", false, "使用本地大模型(Ollama)生成 backtest.yaml 并退出（从 stdin/--llm-prompt/--llm-prompt-file 读取策略描述）")
+	flag.StringVar(&llmAnalyzePath, "llm-analyze", "", "使用本地大模型(Ollama)复盘回测报告JSON并退出（传入 report.json 路径）")
+	flag.StringVar(&llmPrompt, "llm-prompt", "", "LLM 输入（用于生成 backtest.yaml，优先级高于 --llm-prompt-file/stdin）")
+	flag.StringVar(&llmPromptFile, "llm-prompt-file", "", "LLM 输入文件路径（用于生成 backtest.yaml）")
+	flag.StringVar(&llmURL, "llm-url", "http://localhost:11434", "Ollama Base URL（默认 http://localhost:11434）")
+	flag.StringVar(&llmModel, "llm-model", "qwen2.5-coder:14b", "Ollama 模型名称（默认 qwen2.5-coder:14b）")
+	flag.StringVar(&llmOut, "llm-out", "", "LLM 输出路径（生成 backtest.yaml 默认 backtest.yaml；复盘默认 stdout）")
+	flag.StringVar(&llmBTConfig, "llm-bt-config", "", "回测配置文件路径（复盘时可选，帮助模型理解参数）")
+	flag.DurationVar(&llmTimeout, "llm-timeout", 10*time.Minute, "Ollama 请求超时时间（如 10m/180s；首次加载模型可设大一点）")
+	flag.BoolVar(&llmScan, "llm-scan", false, "使用本地大模型(Ollama)将最新信号扫描结果输出为人类可读的执行建议(Markdown)")
+	flag.BoolVar(&llmScanOnly, "llm-scan-only-signal", false, "LLM 扫描建议仅包含有信号的标的（错误仍包含）")
+	flag.BoolVar(&scanMode, "scan", false, "扫描最新一根日K是否产生策略信号并退出（信号在收盘确认，下一交易日开盘执行）")
+	flag.StringVar(&scanOut, "scan-out", "", "扫描输出路径（默认stdout）")
+	flag.BoolVar(&scanJSON, "scan-json", false, "扫描输出使用 JSON 格式（默认表格文本）")
+	flag.BoolVar(&scanOnlySignal, "scan-only-signal", false, "仅输出有信号的标的（错误信息仍输出）")
+	flag.IntVar(&scanDays, "scan-days", 0, "扫描/LLM扫描时覆盖日期窗口：最近 N 天（如 365 表示最近一年；结束日期默认今天）")
+	flag.BoolVar(&scanChart, "scan-chart", false, "扫描/LLM扫描时输出带画线的K线图(SVG)到目录（用于趋势上下文）")
+	flag.StringVar(&scanChartDir, "scan-chart-dir", "scan_charts", "扫描图输出目录（配合 -scan-chart）")
+	flag.IntVar(&scanChartBars, "scan-chart-bars", 220, "每个标的输出最近 N 根K线到图中（配合 -scan-chart）")
 	flag.Parse()
 
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	if llmGenBT || llmAnalyzePath != "" || llmScan {
+		if llmScan && (llmGenBT || llmAnalyzePath != "") {
+			log.Printf("[ERROR] -llm-scan 不能与 -llm-gen-bt/-llm-analyze 同时使用\n")
+			os.Exit(2)
+		}
+		if llmGenBT && llmAnalyzePath != "" {
+			log.Printf("[ERROR] 不能同时使用 -llm-gen-bt 与 -llm-analyze\n")
+			os.Exit(2)
+		}
+		if llmGenBT {
+			out := llmOut
+			if out == "" {
+				out = "backtest.yaml"
+			}
+			if err := runLLMGenerateBacktest(llmURL, llmModel, llmPrompt, llmPromptFile, out); err != nil {
+				log.Printf("[ERROR] LLM 生成回测配置失败: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		if llmAnalyzePath != "" {
+			if err := runLLMAnalyzeReport(llmURL, llmModel, llmAnalyzePath, llmBTConfig, llmOut); err != nil {
+				log.Printf("[ERROR] LLM 复盘失败: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+		if llmScan {
+			btCfg := backtestConfig
+			if llmBTConfig != "" {
+				btCfg = llmBTConfig
+			}
+			if err := runLLMScanAdvice(llmURL, llmModel, btCfg, configPath, llmOut, llmScanOnly, scanDays, scanChart, scanChartDir, scanChartBars); err != nil {
+				log.Printf("[ERROR] LLM 扫描建议生成失败: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
+	}
+
+	if scanMode {
+		if err := runScan(backtestConfig, configPath, scanOut, scanJSON, scanOnlySignal, scanDays, scanChart, scanChartDir, scanChartBars); err != nil {
+			log.Printf("[ERROR] 扫描失败: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if backtestMode {
+		if err := runBacktest(backtestConfig, backtestOut); err != nil {
+			log.Printf("[ERROR] 回测失败: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	// 加载配置
 	cfg := config.GetConfig(configPath)
