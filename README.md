@@ -207,13 +207,13 @@ cp backtest.yaml.example backtest.yaml
 
 ```bash
 cp patterns.yaml.example patterns.yaml
-./stock -backtest -bt-config patterns.yaml -bt-out report.json
+./stock -backtest -bt-config patterns.yaml -bt-out runtime/report.json
 ```
 
 **3. 输出到文件**
 
 ```bash
-./stock -backtest -bt-config backtest.yaml -bt-out report.json
+./stock -backtest -bt-config backtest.yaml -bt-out runtime/report.json
 ```
 
 ## 最新信号扫描（实验）
@@ -246,7 +246,7 @@ cp patterns.yaml.example patterns.yaml
 ./stock -scan -bt-config backtest.yaml -scan-days 365 -scan-chart -scan-chart-bars 220
 ```
 
-图默认输出到 `scan_charts/`，每个标的一个 `SYMBOL.svg`（可用浏览器直接打开）。
+图默认输出到 `runtime/scan_charts/`，每个标的一个 `SYMBOL.svg`（可用浏览器直接打开；可用 `-scan-chart-dir` 自定义目录）。
 
 JSON 输出：
 
@@ -259,31 +259,31 @@ JSON 输出：
 用本地 Ollama 把扫描结果变成可读的执行清单（Markdown）：
 
 ```bash
-./stock -llm-scan -bt-config backtest.yaml -llm-url http://localhost:11434 -llm-model qwen2.5-coder:14b > advice.md
+./stock -llm-scan -bt-config backtest.yaml -llm-url http://localhost:11434 -llm-model qwen2.5-coder:14b > runtime/advice.md
 ```
 
 如果首次加载模型较慢导致超时，可调大超时时间：
 
 ```bash
-./stock -llm-scan -bt-config backtest.yaml -scan-days 365 -llm-timeout 10m > advice.md
+./stock -llm-scan -bt-config backtest.yaml -scan-days 365 -llm-timeout 10m > runtime/advice.md
 ```
 
 建议配合输出 SVG 图（LLM 会在建议里引用 `chart_path`，方便你打开看趋势结构）：
 
 ```bash
-./stock -llm-scan -bt-config backtest.yaml -scan-days 365 -scan-chart -llm-timeout 10m -llm-out advice.md
+./stock -llm-scan -bt-config backtest.yaml -scan-days 365 -scan-chart -llm-timeout 10m -llm-out runtime/advice.md
 ```
 
 最近一年（自动覆盖日期窗口）：
 
 ```bash
-./stock -llm-scan -bt-config backtest.yaml -scan-days 365 > advice.md
+./stock -llm-scan -bt-config backtest.yaml -scan-days 365 > runtime/advice.md
 ```
 
 仅输出有信号的标的：
 
 ```bash
-./stock -llm-scan -bt-config backtest.yaml -llm-scan-only-signal > advice.md
+./stock -llm-scan -bt-config backtest.yaml -llm-scan-only-signal > runtime/advice.md
 ```
 
 ## 本地大模型（Ollama）辅助
@@ -291,7 +291,7 @@ JSON 输出：
 项目支持用本地 Ollama + `qwen2.5-coder:14b` 做两件事：
 
 1) 自然语言策略 → 生成并校验 `backtest.yaml`（严格 JSON Schema，避免乱填字段）  
-2) `report.json` → 复盘总结（Markdown）
+2) `runtime/report.json` → 复盘总结（Markdown）
 
 ### 1. 自然语言生成 backtest.yaml
 
@@ -302,16 +302,16 @@ echo "用日线做蔡森破底翻+假突破，回测 nf_I0 和 sh600000，2018-0
 
 ### 2. 回测报告复盘
 
-先运行回测输出 `report.json`：
+先运行回测输出 `runtime/report.json`：
 
 ```bash
-./stock -backtest -bt-config backtest.yaml -bt-out report.json
+./stock -backtest -bt-config backtest.yaml -bt-out runtime/report.json
 ```
 
 再让 LLM 生成复盘：
 
 ```bash
-./stock -llm-analyze report.json -llm-bt-config backtest.yaml > review.md
+./stock -llm-analyze runtime/report.json -llm-bt-config backtest.yaml > runtime/review.md
 ```
 
 ## 配置文件说明

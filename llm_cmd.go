@@ -126,6 +126,9 @@ Rules:
 		return fmt.Errorf("generated yaml failed to load: %w", err)
 	}
 
+	if err := ensureParentDir(outPath); err != nil {
+		return fmt.Errorf("prepare output dir: %w", err)
+	}
 	return os.WriteFile(outPath, yamlBytes, 0o644)
 }
 
@@ -187,6 +190,9 @@ func runLLMAnalyzeReport(baseURL, model, reportPath, btConfigPath, outPath strin
 	if outPath == "" {
 		_, err := io.WriteString(os.Stdout, out+"\n")
 		return err
+	}
+	if err := ensureParentDir(outPath); err != nil {
+		return fmt.Errorf("prepare output dir: %w", err)
 	}
 	return os.WriteFile(outPath, []byte(out+"\n"), 0o644)
 }
@@ -256,6 +262,9 @@ func runLLMScanAdvice(baseURL, model, btConfigPath, serviceConfigPath, outPath s
 	if outPath == "" {
 		_, err := io.WriteString(os.Stdout, out+"\n")
 		return err
+	}
+	if err := ensureParentDir(outPath); err != nil {
+		return fmt.Errorf("prepare output dir: %w", err)
 	}
 	return os.WriteFile(outPath, []byte(out+"\n"), 0o644)
 }

@@ -74,7 +74,7 @@ func main() {
 	flag.BoolVar(&scanOnlySignal, "scan-only-signal", false, "仅输出有信号的标的（错误信息仍输出）")
 	flag.IntVar(&scanDays, "scan-days", 0, "扫描/LLM扫描时覆盖日期窗口：最近 N 天（如 365 表示最近一年；结束日期默认今天）")
 	flag.BoolVar(&scanChart, "scan-chart", false, "扫描/LLM扫描时输出带画线的K线图(SVG)到目录（用于趋势上下文）")
-	flag.StringVar(&scanChartDir, "scan-chart-dir", "scan_charts", "扫描图输出目录（配合 -scan-chart）")
+	flag.StringVar(&scanChartDir, "scan-chart-dir", "runtime/scan_charts", "扫描图输出目录（配合 -scan-chart）")
 	flag.IntVar(&scanChartBars, "scan-chart-bars", 220, "每个标的输出最近 N 根K线到图中（配合 -scan-chart）")
 	flag.Parse()
 

@@ -19,7 +19,7 @@ help:
 	@echo ""
 	@echo "Vars:"
 	@echo "  SCAN_DAYS=365          # 覆盖扫描窗口：最近 N 天（自然日）"
-	@echo "  SCAN_CHART=1           # 输出带画线的 SVG 图（scan_charts/*.svg）"
+	@echo "  SCAN_CHART=1           # 输出带画线的 SVG 图（$(SCAN_CHART_DIR)/*.svg）"
 	@echo "  SCAN_CHART_BARS=220    # 每张图输出最近 N 根K线"
 	@echo "  LLM_TIMEOUT=10m        # Ollama 超时（首次加载模型可加大）"
 
@@ -30,9 +30,12 @@ BIN ?= stock
 # 服务配置文件（用于行情服务/扫描合并标的；默认读取当前目录 config.yaml）
 CONFIG ?= config.yaml
 
+# 运行时产物统一输出目录（默认会被 .gitignore 忽略）
+RUNTIME_DIR ?= runtime
+
 # 回测配置与输出
 BT_CONFIG ?= backtest.yaml
-BT_OUT ?= report.json
+BT_OUT ?= $(RUNTIME_DIR)/report.json
 
 # 扫描配置（默认复用回测配置）；SCAN_JSON=1 输出 JSON
 SCAN_CONFIG ?= $(BT_CONFIG)
@@ -40,7 +43,7 @@ SCAN_OUT ?=
 SCAN_JSON ?= 0
 SCAN_DAYS ?= 0
 SCAN_CHART ?= 0
-SCAN_CHART_DIR ?= scan_charts
+SCAN_CHART_DIR ?= $(RUNTIME_DIR)/scan_charts
 SCAN_CHART_BARS ?= 220
 
 # 本地大模型（Ollama）配置
@@ -49,7 +52,7 @@ LLM_MODEL ?= qwen2.5-coder:14b
 LLM_TIMEOUT ?= 10m
 # LLM 扫描建议：读取哪个配置文件、输出到哪里
 ADVICE_CONFIG ?= $(BT_CONFIG)
-ADVICE_OUT ?= advice.md
+ADVICE_OUT ?= $(RUNTIME_DIR)/advice.md
 
 .PHONY: build
 # 编译（mac/linux）
@@ -104,19 +107,23 @@ web-build:
 .PHONY: backtest
 # 运行回测（收盘确认，次日开盘成交）
 backtest: build
+	@mkdir -p $(dir $(BT_OUT))
 	./$(BIN) -backtest -bt-config $(BT_CONFIG) -bt-out $(BT_OUT)
 
 .PHONY: scan
 # 扫描最新一根日K：是否有信号（次日开盘执行）；输出含 STOP/TARGET
 scan: build
+	@mkdir -p $(SCAN_CHART_DIR) >/dev/null 2>&1 || true
 	./$(BIN) -scan -bt-config $(SCAN_CONFIG) $(if $(SCAN_OUT),-scan-out $(SCAN_OUT),) $(if $(filter 1,$(SCAN_JSON)),-scan-json,) $(if $(filter-out 0,$(SCAN_DAYS)),-scan-days $(SCAN_DAYS),) $(if $(filter 1,$(SCAN_CHART)),-scan-chart -scan-chart-dir $(SCAN_CHART_DIR) -scan-chart-bars $(SCAN_CHART_BARS),)
 
 .PHONY: scan-only
 # 扫描最新一根日K：只输出有信号的标的（错误仍输出）
 scan-only: build
+	@mkdir -p $(SCAN_CHART_DIR) >/dev/null 2>&1 || true
 	./$(BIN) -scan -scan-only-signal -bt-config $(SCAN_CONFIG) $(if $(SCAN_OUT),-scan-out $(SCAN_OUT),) $(if $(filter 1,$(SCAN_JSON)),-scan-json,) $(if $(filter-out 0,$(SCAN_DAYS)),-scan-days $(SCAN_DAYS),) $(if $(filter 1,$(SCAN_CHART)),-scan-chart -scan-chart-dir $(SCAN_CHART_DIR) -scan-chart-bars $(SCAN_CHART_BARS),)
 
 .PHONY: llm-scan
 # 使用本地 Ollama 将扫描结果生成可读的执行清单（Markdown）
 llm-scan: build
+	@mkdir -p $(dir $(ADVICE_OUT))
 	./$(BIN) -llm-scan -bt-config $(ADVICE_CONFIG) -llm-url $(LLM_URL) -llm-model $(LLM_MODEL) -llm-timeout $(LLM_TIMEOUT) -llm-out $(ADVICE_OUT) $(if $(filter-out 0,$(SCAN_DAYS)),-scan-days $(SCAN_DAYS),) $(if $(filter 1,$(SCAN_CHART)),-scan-chart -scan-chart-dir $(SCAN_CHART_DIR) -scan-chart-bars $(SCAN_CHART_BARS),)

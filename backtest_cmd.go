@@ -23,6 +23,9 @@ func runBacktest(configPath, outPath string) error {
 		return backtest.WriteResultsJSON(os.Stdout, results)
 	}
 
+	if err := ensureParentDir(outPath); err != nil {
+		return fmt.Errorf("prepare output dir: %w", err)
+	}
 	f, err := os.Create(outPath)
 	if err != nil {
 		return fmt.Errorf("create output: %w", err)
@@ -30,4 +33,3 @@ func runBacktest(configPath, outPath string) error {
 	defer f.Close()
 	return backtest.WriteResultsJSON(f, results)
 }
-

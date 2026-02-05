@@ -1,5 +1,7 @@
 # Local config (do not commit secrets)
 config.yaml
+backtest.yaml
+patterns.yaml
 
 # Build artifacts / executables
 /stock
@@ -13,6 +15,19 @@ config.yaml
 # Release / build output directories
 /dist/
 /cache/
+
+# Runtime outputs (generated)
+/runtime/
+/scan_charts/
+report.json
+report*.json
+advice.md*
+review.md*
+*.log
+*.pid
+*.prof
+*.pprof
+coverage.out
 
 # Tar archives
 *.tar
