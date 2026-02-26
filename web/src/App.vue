@@ -110,7 +110,10 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const API_BASE = 'http://localhost:19527/api'
+// Default to same-origin so the built-in frontend (served by stockd) works out of the box.
+// For standalone dev, Vite proxies /api to http://localhost:19527 by default (see web/vite.config.js).
+// You can override via VITE_API_BASE, e.g. VITE_API_BASE="http://127.0.0.1:19527/api".
+const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 
 const stocks = ref([])
 const futures = ref([])

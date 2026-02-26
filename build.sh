@@ -66,7 +66,7 @@ echo "  输出文件: ${BINARY_NAME}"
 # 编译
 GOOS=$GOOS GOARCH=$GOARCH go build -o ${BUILD_DIR}/${BINARY_NAME} \
     -ldflags "-s -w -X main.Version=${VERSION}" \
-    .
+    ./cmd/stock
 
 if [ ! -f "${BUILD_DIR}/${BINARY_NAME}" ]; then
     echo "❌ 错误: 编译失败"

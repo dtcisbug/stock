@@ -41,6 +41,11 @@ func NewRunner() *Runner {
 	return &Runner{klineFetcher: fetcher.NewKLineFetcher()}
 }
 
+// LoadBars loads daily bars for a single instrument using the same logic as backtest/scan.
+func (r *Runner) LoadBars(inst Instrument, cfg RunConfig) ([]Bar, error) {
+	return r.loadBars(inst, cfg)
+}
+
 func (r *Runner) Run(cfg RunConfig) ([]Result, error) {
 	if len(cfg.Instruments) == 0 {
 		return nil, fmt.Errorf("no instruments configured")

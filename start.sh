@@ -86,7 +86,7 @@ cd "$SCRIPT_DIR"
 # 检查是否已编译
 if [ ! -f "./stock" ] && [ ! -f "./stock.exe" ]; then
     echo "[BUILD] Compiling..."
-    go build -o stock .
+    go build -o stock ./cmd/stock
     if [ $? -ne 0 ]; then
         echo "[ERROR] Build failed"
         exit 1
@@ -105,7 +105,7 @@ echo ""
 
 # 启动服务
 if [ "$CLI_MODE" = true ]; then
-    $EXE -cli
+    $EXE -cli -standalone
 else
     $EXE
 fi

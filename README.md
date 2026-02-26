@@ -89,14 +89,21 @@ chmod +x start.sh
 ### 手动编译运行
 
 ```bash
-# 编译
-go build -o stock.exe .
+# 编译（推荐：wrapper 二进制，兼容原有用法：默认启动服务；加 -cli/-scan/-backtest/-analyze 则走 CLI 工具）
+go build -o stock.exe ./cmd/stock
 
 # 运行
 ./stock.exe
 
 # 终端模式
-./stock.exe -cli
+./stock.exe -cli -standalone
+```
+
+也可以分别编译：
+
+```bash
+go build -o stockd ./cmd/stockd      # 仅服务（HTTP + 内置前端）
+go build -o stockctl ./cmd/stockctl  # 仅 CLI（实时行情 CLI + scan/backtest/analyze/llm）
 ```
 
 服务启动后访问 http://localhost:19527
@@ -109,6 +116,22 @@ npm install
 npm run dev
 ```
 访问 http://localhost:5173
+
+说明：
+- 前端默认使用同源 API 路径 `/api`（便于内置前端开箱即用）
+- 本仓库的 `web/vite.config.js` 已为开发态配置了代理：`/api -> http://localhost:19527`
+- 如需手动覆盖，可设置 `VITE_API_BASE`（例如 `VITE_API_BASE="http://127.0.0.1:19527/api"`）
+
+### 方式 B：内置前端（开箱即用）
+
+Vite 构建产物默认使用 `/assets/...` 路径，后端已兼容该路径；要让二进制内置前端可用，需要先构建前端：
+
+```bash
+cd web && npm install && npm run build
+cd .. && go build -o stock ./cmd/stock
+./stock -config config.yaml
+```
+访问 http://localhost:19527
 
 ## API 接口
 
@@ -124,11 +147,12 @@ npm run dev
 
 ## AI 分析功能
 
-- 使用 Claude API 分析最近 7 个交易日的 K 线走势
+- 使用 Claude API 分析最近约 60 个交易日（约 3 个月）的日 K 走势
 - 交易时间内每小时自动分析一次
 - 分析内容包括：近期趋势、成交量变化、短期走势预判
-- 需要设置环境变量 `ANTHROPIC_API_KEY`
-- 如 API 无法直接访问，可设置 `ANTHROPIC_API_BASE` 使用代理服务
+- Token 支持：`api.token`（配置文件）或环境变量 `ANTHROPIC_AUTH_TOKEN/ANTHROPIC_API_KEY`
+- 代理与模型：环境变量 `ANTHROPIC_BASE_URL/ANTHROPIC_API_BASE/ANTHROPIC_MODEL`
+- 分析结果会持久化到 `runtime/ai/analysis.json`，服务重启后会自动加载
 
 ## 配置
 
@@ -149,6 +173,17 @@ Futures: []string{
 },
 ```
 
+### 单文件整合（推荐维护一个 config.yaml）
+
+除了行情服务配置（`api/monitor/server`），你也可以把回测/扫描配置（`backtest/strategy`）放到同一个 `config.yaml` 里：
+
+```bash
+./stock -scan -bt-config config.yaml
+./stock -backtest -bt-config config.yaml -bt-out runtime/report.json
+```
+
+如果 `backtest/strategy` 未配置，程序会默认用 `monitor.stocks / monitor.futures` 作为回测标的，并使用默认 `tsai_sen` 参数；外盘 `hf_`（如 `hf_CL/hf_SI`）仅用于实时行情，回测/扫描会自动跳过。
+
 ### 代码格式
 
 | 市场 | 格式 | 示例 |
@@ -162,9 +197,10 @@ Futures: []string{
 
 ```
 stock/
-├── main.go              # 程序入口
 ├── start.ps1            # Windows 启动脚本
 ├── start.sh             # Linux/Mac 启动脚本
+├── cmd/                 # Go 入口（stock/stockd/stockctl）
+├── internal/            # 内部实现（stockd/stockctl/realtime/terminalui）
 ├── config/              # 配置管理
 ├── model/               # 数据模型
 ├── fetcher/             # 数据拉取（股票/期货/K线）
@@ -172,8 +208,15 @@ stock/
 ├── cache/               # 内存缓存
 ├── trading/             # 交易时间判断
 ├── api/                 # REST API
+├── backtest/             # 回测/扫描/出图引擎
+├── llm/                 # Ollama 客户端与 prompt
+├── runtime/             # 运行时产物（默认忽略提交）
 └── web/                 # Vue 前端
 ```
+
+更多说明：
+- 总览：`docs/PROJECT_OVERVIEW.md`
+- 扫描/回测/年度分析：`docs/SCAN_BACKTEST_ANALYZE.md`
 
 ## 交易时间
 
@@ -252,6 +295,33 @@ JSON 输出：
 
 ```bash
 ./stock -scan -bt-config backtest.yaml -scan-json
+```
+
+## 一年量价分析（实验）
+
+对 `config.yaml` 中的标的（`monitor.stocks / monitor.futures`，自动跳过 `hf_`）做“最近一年”量价分析，并复用 `backtest.yaml` 的 **蔡森破底翻（tsai_sen）** 参数输出：
+- `runtime/analysis/analysis.json`（主产物）
+- `runtime/analysis/analysis.csv`（摘要）
+- `runtime/analysis/trades.csv`（一年窗口内交易明细）
+- `runtime/analysis/charts/*.svg`（一年K线图：价格 + 成交量 + 支撑/压力/止损/目标等叠加）
+- `runtime/analysis/index.html`（本地网页报告，可直接用浏览器打开）
+
+最近 365 天（自然日窗口）：
+
+```bash
+./stock -analyze -config config.yaml -bt-config backtest.yaml -analyze-window-days 365
+```
+
+最近 252 根交易日 K 线（按 bar 数截取）：
+
+```bash
+./stock -analyze -config config.yaml -bt-config backtest.yaml -analyze-bars 252
+```
+
+如果你正在运行服务（`./stock -config config.yaml`），且本地已有 `runtime/analysis/index.html`，可直接访问：
+
+```
+http://localhost:19527/analysis
 ```
 
 ## 扫描建议（Ollama）
@@ -402,7 +472,12 @@ A: 在 `config.yaml` 中设置 `server.enable_ai: false`
 A: 环境变量优先级更高,可以用来临时覆盖配置文件的设置
 
 ### Q: 前端页面无法访问?
-A: 确保使用构建脚本打包,前端资源已嵌入到 stock.exe 中。直接编译需要先运行 `cd web && npm run build`
+A:
+- 内置前端：需要先运行 `cd web && npm install && npm run build` 再 `go build ./cmd/stock`（确保 `web/dist` 存在）
+- 开发态：运行 `cd web && npm run dev` 后访问 http://localhost:5173（`/api` 会被代理到 http://localhost:19527）
+
+### Q: AI 分析重启后为什么还能看到旧结果?
+A: 分析结果会落盘到 `runtime/ai/analysis.json`，服务启动时会自动加载；如需清空，删除该文件即可
 
 ### Q: 如何在 Linux 上运行?
 A: 修改 `build.sh` 中的 `PLATFORMS` 变量为 `linux/amd64`,重新构建即可

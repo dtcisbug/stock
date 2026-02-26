@@ -5,6 +5,8 @@ patterns.yaml
 
 # Build artifacts / executables
 /stock
+/stockd
+/stockctl
 *.exe
 *.out
 *.app

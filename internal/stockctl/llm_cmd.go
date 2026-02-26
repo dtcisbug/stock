@@ -1,4 +1,4 @@
-package main
+package stockctl
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"stock/llm"
 )
 
-func runLLMGenerateBacktest(baseURL, model, prompt, promptFile, outPath string) error {
+func runLLMGenerateBacktest(baseURL, model, prompt, promptFile, outPath string, timeout time.Duration) error {
 	userPrompt, err := readLLMInput(prompt, promptFile)
 	if err != nil {
 		return err
@@ -23,8 +23,8 @@ func runLLMGenerateBacktest(baseURL, model, prompt, promptFile, outPath string) 
 		return fmt.Errorf("empty prompt")
 	}
 
-	client := llm.NewOllamaClientWithTimeout(baseURL, model, llmTimeout)
-	ctx, cancel := context.WithTimeout(context.Background(), llmTimeout+30*time.Second)
+	client := llm.NewOllamaClientWithTimeout(baseURL, model, timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout+30*time.Second)
 	defer cancel()
 
 	schemaHint := `Schema (JSON object only):
@@ -132,7 +132,7 @@ Rules:
 	return os.WriteFile(outPath, yamlBytes, 0o644)
 }
 
-func runLLMAnalyzeReport(baseURL, model, reportPath, btConfigPath, outPath string) error {
+func runLLMAnalyzeReport(baseURL, model, reportPath, btConfigPath, outPath string, timeout time.Duration) error {
 	raw, err := os.ReadFile(reportPath)
 	if err != nil {
 		return err
@@ -157,8 +157,8 @@ func runLLMAnalyzeReport(baseURL, model, reportPath, btConfigPath, outPath strin
 		btCfgText = string(b)
 	}
 
-	client := llm.NewOllamaClientWithTimeout(baseURL, model, llmTimeout)
-	ctx, cancel := context.WithTimeout(context.Background(), llmTimeout+30*time.Second)
+	client := llm.NewOllamaClientWithTimeout(baseURL, model, timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout+30*time.Second)
 	defer cancel()
 
 	defs := strings.TrimSpace(`
@@ -197,7 +197,7 @@ func runLLMAnalyzeReport(baseURL, model, reportPath, btConfigPath, outPath strin
 	return os.WriteFile(outPath, []byte(out+"\n"), 0o644)
 }
 
-func runLLMScanAdvice(baseURL, model, btConfigPath, serviceConfigPath, outPath string, onlySignal bool, scanDays int, scanChart bool, scanChartDir string, scanChartBars int) error {
+func runLLMScanAdvice(baseURL, model, btConfigPath, serviceConfigPath, outPath string, onlySignal bool, scanDays int, scanChart bool, scanChartDir string, scanChartBars int, timeout time.Duration) error {
 	cfg, err := loadScanRunConfig(btConfigPath, serviceConfigPath)
 	if err != nil {
 		return err
@@ -234,8 +234,8 @@ func runLLMScanAdvice(baseURL, model, btConfigPath, serviceConfigPath, outPath s
 		return fmt.Errorf("read backtest config: %w", err)
 	}
 
-	client := llm.NewOllamaClientWithTimeout(baseURL, model, llmTimeout)
-	ctx, cancel := context.WithTimeout(context.Background(), llmTimeout+30*time.Second)
+	client := llm.NewOllamaClientWithTimeout(baseURL, model, timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout+30*time.Second)
 	defer cancel()
 
 	prompt := ""

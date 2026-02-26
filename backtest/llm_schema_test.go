@@ -54,4 +54,3 @@ func TestParseLLMBacktestConfigJSON_UnknownFieldRejected(t *testing.T) {
 		t.Fatalf("expected error")
 	}
 }
-

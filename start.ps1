@@ -57,7 +57,7 @@ Set-Location $ScriptDir
 $ExePath = Join-Path $ScriptDir "stock.exe"
 if (-not (Test-Path $ExePath)) {
     Write-Host "[BUILD] Compiling..."
-    go build -o stock.exe .
+    go build -o stock.exe ./cmd/stock
     if ($LASTEXITCODE -ne 0) {
         Write-Host "[ERROR] Build failed"
         exit 1
@@ -70,7 +70,7 @@ Write-Host ""
 
 # Start service
 if ($Cli) {
-    & $ExePath -cli
+    & $ExePath -cli -standalone
 } else {
     & $ExePath
 }

@@ -1,4 +1,4 @@
-package main
+package stockctl
 
 import (
 	"fmt"
@@ -31,8 +31,24 @@ func loadScanRunConfig(btConfigPath, serviceConfigPath string) (backtest.RunConf
 		return backtest.RunConfig{}, fmt.Errorf("load config.yaml: %w", err)
 	}
 
-	btCfg.Instruments = mergeInstruments(btCfg.Instruments, cfg.Stocks, cfg.Futures)
+	// 扫描/回测目前仅支持 A股 与国内期货日K；外盘(hf_)仅用于实时行情监控，避免自动合并进扫描。
+	btCfg.Instruments = mergeInstruments(btCfg.Instruments, cfg.Stocks, filterChinaFutures(cfg.Futures))
 	return btCfg, nil
+}
+
+func filterChinaFutures(codes []string) []string {
+	out := make([]string, 0, len(codes))
+	for _, c := range codes {
+		s := strings.TrimSpace(c)
+		if s == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(s), "hf_") {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 func mergeInstruments(existing []backtest.Instrument, stocks []string, futures []string) []backtest.Instrument {

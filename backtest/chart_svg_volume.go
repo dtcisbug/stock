@@ -9,36 +9,9 @@ import (
 	"strings"
 )
 
-type ChartLine struct {
-	Price float64
-	Label string
-	Color string
-	Dash  bool
-}
-
-type ChartPoint struct {
-	Date  string
-	Price float64
-	Label string
-	Color string
-}
-
-type SVGChartOptions struct {
-	Width  int
-	Height int
-}
-
-func (o SVGChartOptions) withDefaults() SVGChartOptions {
-	if o.Width <= 0 {
-		o.Width = 980
-	}
-	if o.Height <= 0 {
-		o.Height = 520
-	}
-	return o
-}
-
-func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []ChartPoint, opt SVGChartOptions) ([]byte, error) {
+// RenderCandlesWithVolumeSVG renders a 2-panel SVG: top = candles, bottom = volume bars (+ optional vol MA).
+// It keeps the same overlay semantics as RenderCandlesSVG (lines/points apply to price panel).
+func RenderCandlesWithVolumeSVG(symbol string, bars []Bar, lines []ChartLine, points []ChartPoint, volMAN int, opt SVGChartOptions) ([]byte, error) {
 	opt = opt.withDefaults()
 	if len(bars) < 2 {
 		return nil, fmt.Errorf("not enough bars: %d", len(bars))
@@ -46,12 +19,16 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 
 	minP := math.Inf(1)
 	maxP := math.Inf(-1)
+	maxV := int64(0)
 	for _, b := range bars {
 		if b.Low > 0 && b.Low < minP {
 			minP = b.Low
 		}
 		if b.High > 0 && b.High > maxP {
 			maxP = b.High
+		}
+		if b.Volume > maxV {
+			maxV = b.Volume
 		}
 	}
 	for _, ln := range lines {
@@ -73,6 +50,7 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 	if math.IsInf(minP, 0) || math.IsInf(maxP, 0) || maxP <= minP {
 		return nil, fmt.Errorf("invalid price range")
 	}
+
 	pad := (maxP - minP) * 0.05
 	if pad <= 0 {
 		pad = minP * 0.02
@@ -93,13 +71,34 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 		return nil, fmt.Errorf("invalid chart size")
 	}
 
+	gap := 14.0
+	priceH := plotH * 0.72
+	volH := plotH - priceH - gap
+	if volH < 60 {
+		volH = 60
+		priceH = plotH - volH - gap
+	}
+	priceTop := mTop
+	priceBottom := priceTop + priceH
+	volTop := priceBottom + gap
+	volBottom := volTop + volH
+
 	priceToY := func(p float64) float64 {
 		if p <= 0 {
-			return mTop + plotH/2
+			return priceTop + priceH/2
 		}
 		r := (p - minP) / (maxP - minP)
 		r = math.Max(0, math.Min(1, r))
-		return mTop + (1.0-r)*plotH
+		return priceTop + (1.0-r)*priceH
+	}
+
+	volToY := func(v int64) float64 {
+		if maxV <= 0 || v <= 0 {
+			return volBottom
+		}
+		r := float64(v) / float64(maxV)
+		r = math.Max(0, math.Min(1, r))
+		return volBottom - r*volH
 	}
 
 	n := float64(len(bars))
@@ -115,6 +114,9 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 	up := "#22c55e"
 	down := "#ef4444"
 	txt := "rgba(255,255,255,0.85)"
+	volUp := "rgba(34,197,94,0.35)"
+	volDown := "rgba(239,68,68,0.35)"
+	volMACol := "rgba(56,189,248,0.9)"
 
 	var buf bytes.Buffer
 	buf.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n")
@@ -131,16 +133,64 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 	buf.WriteString(`<text x="` + fmtFloat(mLeft) + `" y="16" fill="` + txt + `" font-size="14" font-family="ui-monospace, Menlo, Monaco, Consolas, monospace">` +
 		html.EscapeString(title) + `  ` + html.EscapeString(firstD) + ` ~ ` + html.EscapeString(lastD) + `</text>` + "\n")
 
-	// Grid: price lines (5)
+	// Price grid (5)
 	for k := 0; k <= 5; k++ {
-		y := mTop + (float64(k)/5.0)*plotH
+		y := priceTop + (float64(k)/5.0)*priceH
 		buf.WriteString(`<line x1="` + fmtFloat(mLeft) + `" y1="` + fmtFloat(y) + `" x2="` + fmtFloat(mLeft+plotW) + `" y2="` + fmtFloat(y) + `" stroke="` + grid + `" stroke-width="1"/>` + "\n")
 		p := maxP - (float64(k)/5.0)*(maxP-minP)
 		buf.WriteString(`<text x="` + fmtFloat(6) + `" y="` + fmtFloat(y+4) + `" fill="` + txt + `" font-size="12" font-family="ui-monospace, Menlo, Monaco, Consolas, monospace">` +
 			html.EscapeString(fmtPrice(p)) + `</text>` + "\n")
 	}
 
-	// Candles
+	// Volume grid (2)
+	for k := 0; k <= 2; k++ {
+		y := volTop + (float64(k)/2.0)*volH
+		buf.WriteString(`<line x1="` + fmtFloat(mLeft) + `" y1="` + fmtFloat(y) + `" x2="` + fmtFloat(mLeft+plotW) + `" y2="` + fmtFloat(y) + `" stroke="` + grid + `" stroke-width="1"/>` + "\n")
+		if maxV > 0 {
+			v := float64(maxV) * (1.0 - float64(k)/2.0)
+			buf.WriteString(`<text x="` + fmtFloat(6) + `" y="` + fmtFloat(y+4) + `" fill="` + txt + `" font-size="12" font-family="ui-monospace, Menlo, Monaco, Consolas, monospace">` +
+				html.EscapeString(fmtVol(v)) + `</text>` + "\n")
+		}
+	}
+
+	// Volume bars
+	for i, b := range bars {
+		x := xAt(i)
+		col := volUp
+		if b.Close < b.Open {
+			col = volDown
+		}
+		y := volToY(b.Volume)
+		hh := volBottom - y
+		if hh < 1 {
+			hh = 1
+		}
+		buf.WriteString(`<rect x="` + fmtFloat(x-cw/2) + `" y="` + fmtFloat(y) + `" width="` + fmtFloat(cw) + `" height="` + fmtFloat(hh) + `" fill="` + col + `"/>` + "\n")
+	}
+
+	// Volume MA line (optional)
+	if volMAN > 1 && len(bars) >= volMAN {
+		var pts strings.Builder
+		for i := range bars {
+			ma := volMA(bars, i, volMAN)
+			if ma <= 0 {
+				continue
+			}
+			x := xAt(i)
+			y := volToY(int64(ma))
+			if pts.Len() > 0 {
+				pts.WriteByte(' ')
+			}
+			pts.WriteString(fmtFloat(x))
+			pts.WriteByte(',')
+			pts.WriteString(fmtFloat(y))
+		}
+		if pts.Len() > 0 {
+			buf.WriteString(`<polyline fill="none" stroke="` + volMACol + `" stroke-width="1.4" points="` + pts.String() + `"/>` + "\n")
+		}
+	}
+
+	// Candles (price panel)
 	for i, b := range bars {
 		x := xAt(i)
 		o := b.Open
@@ -162,13 +212,11 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 			yBot = yTop + 1
 		}
 
-		// wick
 		buf.WriteString(`<line x1="` + fmtFloat(x) + `" y1="` + fmtFloat(yHi) + `" x2="` + fmtFloat(x) + `" y2="` + fmtFloat(yLo) + `" stroke="` + col + `" stroke-width="1"/>` + "\n")
-		// body
 		buf.WriteString(`<rect x="` + fmtFloat(x-cw/2) + `" y="` + fmtFloat(yTop) + `" width="` + fmtFloat(cw) + `" height="` + fmtFloat(yBot-yTop) + `" fill="` + col + `" opacity="0.9"/>` + "\n")
 	}
 
-	// Overlay lines
+	// Overlay lines (price panel)
 	for _, ln := range lines {
 		if ln.Price <= 0 {
 			continue
@@ -190,7 +238,7 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 		}
 	}
 
-	// Overlay points
+	// Overlay points (price panel)
 	for _, pt := range points {
 		if pt.Price <= 0 {
 			continue
@@ -199,7 +247,6 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 		if col == "" {
 			col = "#38bdf8"
 		}
-		// locate x by date
 		x := -1.0
 		for i := range bars {
 			if bars[i].Time.Format("2006-01-02") == pt.Date {
@@ -225,22 +272,24 @@ func RenderCandlesSVG(symbol string, bars []Bar, lines []ChartLine, points []Cha
 	buf.WriteString(`<text x="` + fmtFloat(mLeft+plotW-70) + `" y="` + fmtFloat(mTop+plotH+mBottom-12) + `" fill="` + txt + `" font-size="12" font-family="ui-monospace, Menlo, Monaco, Consolas, monospace">` +
 		html.EscapeString(lastD) + `</text>` + "\n")
 
+	// Volume label
+	if volMAN > 1 {
+		buf.WriteString(`<text x="` + fmtFloat(mLeft) + `" y="` + fmtFloat(volTop-4) + `" fill="` + txt + `" font-size="12" font-family="ui-monospace, Menlo, Monaco, Consolas, monospace">` +
+			html.EscapeString(fmt.Sprintf("VOLUME (MA%d)", volMAN)) + `</text>` + "\n")
+	} else {
+		buf.WriteString(`<text x="` + fmtFloat(mLeft) + `" y="` + fmtFloat(volTop-4) + `" fill="` + txt + `" font-size="12" font-family="ui-monospace, Menlo, Monaco, Consolas, monospace">VOLUME</text>` + "\n")
+	}
+
 	buf.WriteString(`</svg>` + "\n")
 	return buf.Bytes(), nil
 }
 
-func fmtFloat(x float64) string {
-	// stable compact formatting for SVG attributes
-	return strconv.FormatFloat(x, 'f', 2, 64)
-}
-
-func fmtPrice(p float64) string {
-	// keep price labels readable
-	if p >= 1000 {
-		return strconv.FormatFloat(p, 'f', 0, 64)
+func fmtVol(v float64) string {
+	if v >= 100000000 {
+		return strconv.FormatFloat(v/100000000, 'f', 1, 64) + "e8"
 	}
-	if p >= 100 {
-		return strconv.FormatFloat(p, 'f', 1, 64)
+	if v >= 10000 {
+		return strconv.FormatFloat(v/10000, 'f', 1, 64) + "e4"
 	}
-	return strconv.FormatFloat(p, 'f', 2, 64)
+	return strconv.FormatFloat(v, 'f', 0, 64)
 }

@@ -22,7 +22,7 @@ fi
 
 # 编译最新版本
 echo "正在编译最新版本..."
-go build -o stock .
+go build -o stock ./cmd/stock
 
 # 检查编译是否成功
 if [ $? -eq 0 ]; then
@@ -31,10 +31,10 @@ if [ $? -eq 0 ]; then
     # 检查是否存在配置文件
     if [ -f "$CONFIG_FILE" ]; then
         echo "使用配置文件: $CONFIG_FILE"
-        ./stock -cli -config "$CONFIG_FILE"
+        ./stock -cli -standalone -config "$CONFIG_FILE"
     else
         echo "使用默认配置启动"
-        ./stock -cli
+        ./stock -cli -standalone
     fi
 else
     echo "编译失败，请检查代码错误"

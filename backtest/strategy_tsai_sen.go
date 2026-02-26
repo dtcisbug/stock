@@ -115,6 +115,10 @@ func NewTsaiSenStrategy(p TsaiSenParams) *TsaiSenStrategy {
 	return &TsaiSenStrategy{p: pp}
 }
 
+func (s *TsaiSenStrategy) Params() TsaiSenParams {
+	return s.p
+}
+
 func (s *TsaiSenStrategy) Clone() Strategy {
 	return NewTsaiSenStrategy(s.p)
 }

@@ -5,7 +5,7 @@ import "time"
 type InstrumentType string
 
 const (
-	InstrumentTypeStock  InstrumentType = "stock"
+	InstrumentTypeStock   InstrumentType = "stock"
 	InstrumentTypeFutures InstrumentType = "futures"
 )
 
